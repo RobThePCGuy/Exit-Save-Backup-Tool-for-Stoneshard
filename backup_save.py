@@ -1,6 +1,7 @@
 import os
 import os.path as op
 import shutil
+import tempfile
 
 from settings import load_config
 
@@ -37,15 +38,35 @@ def backup_save(config):
     if backup_directory_exists:
         stone_shard_number_of_files = len(os.listdir(stoneshard_directory))
         if stoneshard_directory_exists and stone_shard_number_of_files == 3:
-            backup_directory_files = os.listdir(backup_directory)
-            for file in backup_directory_files:
-                path = op.join(backup_directory, file)
-                os.remove(path)
-            print(f"-- [Backup_Save]: Removed The Backup Files In:\n\n{backup_directory}\n")
-            print("---------------------- And Then -------------------\n")
             stone_shard_files = os.listdir(stoneshard_directory)
-            for file in stone_shard_files:
-                shutil.copy(stoneshard_directory + "/" + file, backup_directory)
+
+            # Stage the new save in a temporary folder first. The existing backup
+            # is left completely untouched until every file has copied, so a copy
+            # that fails part way through (the game often still holds the save open
+            # right after "Save and Exit") can never leave the user with no backup.
+            backup_directory_normalized = op.normpath(backup_directory)
+            backup_parent = op.dirname(backup_directory_normalized)
+            temp_directory = tempfile.mkdtemp(prefix=".exitsave_tmp_", dir=backup_parent)
+            try:
+                for file in stone_shard_files:
+                    shutil.copy(stoneshard_directory + "/" + file, temp_directory)
+
+                # Every file copied successfully. Only now do we swap the staged
+                # copy in for the old backup: move the old backup aside, move the
+                # new one into place, then delete the old one. Each move is atomic,
+                # and if the second move fails we roll the old backup back.
+                old_directory = temp_directory + "_old"
+                os.replace(backup_directory_normalized, old_directory)
+                try:
+                    os.replace(temp_directory, backup_directory_normalized)
+                except Exception:
+                    os.replace(old_directory, backup_directory_normalized)
+                    raise
+                shutil.rmtree(old_directory, ignore_errors=True)
+            except Exception:
+                shutil.rmtree(temp_directory, ignore_errors=True)
+                raise
+
             print(
                 f"-- [Backup_Save]: Copied Files From:\n\n{stoneshard_directory}\n\n----------------------- To ------------------------\n\n{backup_directory}\n"
             )
@@ -55,7 +76,7 @@ def backup_save(config):
 
 
 def main():
-    config = load_config("config.py")
+    config = load_config("config.json")
     backup_save(config)
 
 
