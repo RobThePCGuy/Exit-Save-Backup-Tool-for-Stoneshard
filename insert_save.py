@@ -28,13 +28,26 @@ def insert_save(config):
         pass
 
     if stoneshard_directory_exists and backup_directory_exists:
+        backup_files = os.listdir(backup_directory)
+
+        # Make sure there is actually a usable backup before we touch the live
+        # save. An empty (or incomplete) backup folder would otherwise be
+        # reported as a successful restore while copying nothing.
+        if len(backup_files) != 3:
+            print(
+                f"-- [Insert_Save]: The Backup Folder\n\n{backup_directory}\n\nMust Have 3 Files Inside It To Restore --"
+            )
+            print("---------------------------------------------------")
+            return
+
+        for file in backup_files:
+            shutil.copy(backup_directory + "/" + file, stoneshard_directory)
+
+        # Only report success once every file has actually copied.
         print(
             f"-- [Insert_Save]: Copied The Backup Exit Save From:\n\n{backup_directory}\n\n----------------------- To ------------------------\n\n{stoneshard_directory}\n"
         )
         print("---------------------------------------------------")
-        backup_files = os.listdir(backup_directory)
-        for file in backup_files:
-            shutil.copy(backup_directory + "/" + file, stoneshard_directory)
         print("----------- [Insert_Save]: F I N I S H E D --------")
         print("---------------------------------------------------")
 
